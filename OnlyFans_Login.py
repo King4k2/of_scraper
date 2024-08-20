@@ -1,4 +1,7 @@
-from seleniumwire import webdriver
+import pickle
+from selenium.webdriver.chrome.webdriver import WebDriver as Chrome
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.chrome.options import Options as ChromeOptions
 import time
 import openpyxl
 import json
@@ -18,28 +21,17 @@ def onlyfans_login():
             a = sh.max_row
         else:
             a = sh.max_row+1
-    options = webdriver.ChromeOptions()
+    options = ChromeOptions()
+    service = ChromeService(executable_path='chromedriver-win64/chromedriver.exe')
     options.add_argument("--disable-blink-features=AutomationControlled")
-    driver = webdriver.Chrome(options=options)
+    driver = Chrome(service=service, options=options)
     driver.get("https://onlyfans.com/")
     i = input("Input something: ")
     cookies_ = driver.get_cookies()
-    with open(f'{acc_name}_OFS_cookies.json', 'w') as file:
-        json.dump(cookies_, file)
-    driver.close()
-    res = req_interceptor(driver)
-    if type(res) is str:
-        print(res)
-    else:
-        sh[f"A{a}"] = acc_name
-        sh[f"B{a}"] = res[0]
-        sh[f"C{a}"] = res[1]
-        sh[f"D{a}"] = res[2]
-        sh[f"E{a}"] = res[3]
-        wb.save(filename="OnlyFansConfig.xlsx")
-        wb.close()
-
-        driver.quit()
+    # res = req_interceptor(driver)
+    with open(f'{acc_name}_OFS_cookies.pkl', 'wb')as file:
+        pickle.dump(cookies_, file)
+    driver.quit()
 
 
 def req_interceptor(driver):

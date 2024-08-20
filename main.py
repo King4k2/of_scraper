@@ -6,11 +6,14 @@ from telethon.tl.types import PeerChannel
 import time
 import re
 import openpyxl
-from seleniumwire import webdriver
+from selenium.webdriver.chrome.webdriver import WebDriver
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 import json
 import pathlib
+import pickle
 
 
 async def download_img(msg, f_loc):
@@ -47,7 +50,6 @@ def check_for_el_by_id(driver, value: str):
             continue
         finally:
             x = x + 1
-
 
 
 def upload_stories_process(driver, people_tag):
@@ -88,7 +90,8 @@ def upload_stories_process(driver, people_tag):
 
 
 def upload_stories(ofs_data_dict: dict, account_name: str, people_tag: str):
-    options_ = webdriver.ChromeOptions()
+    options_ = ChromeOptions()
+    service = ChromeService(executable_path='chromedriver-win64/chromedriver.exe')
     # disable webdriver mode
     options_.add_argument("start-maximized")
     options_.add_experimental_option("excludeSwitches", ["enable-automation"])
@@ -97,9 +100,17 @@ def upload_stories(ofs_data_dict: dict, account_name: str, people_tag: str):
     options_.add_argument(f"user-agent={ofs_data_dict.get(account_name)[0]}")
     options_.add_argument(f"accept-language={ofs_data_dict.get(account_name)[1]}")
 
-    driver = webdriver.Chrome(options=options_)
+    driver = WebDriver(service=service, options=options_)
     driver.get(url="https://onlyfans.com/")
     # --------------------------- ЗДЕСЬ ДОЛЖНА БЫТЬ АВТОРИЗАЦИЯ
+    time.sleep(5)
+    for cookie_ in pickle.load(open(f'{account_name}_OFS_cookies.pkl', 'rb')):
+        print(cookie_)
+        #print({"name": cookie_.split("=")[0], "value": cookie_.split("=")[1]})
+        #driver.add_cookie({"name": cookie_.split("=")[0], "value": cookie_.split("=")[1]})
+        driver.add_cookie(cookie_)
+    time.sleep(5)
+    driver.refresh()
 
     # ----------------------------
     inp = input()
@@ -188,7 +199,7 @@ async def check_for_posts():
 if __name__ == "__main__":
     ofs_data_wb = openpyxl.load_workbook("OnlyFansConfig.xlsx")
     ofs_data_sh = ofs_data_wb["Sheet1"]
-    if ofs_data_sh.max_row == 2:
+    if ofs_data_sh.max_row == 1:
         print("You need to login into your OFS account first!")
     account_data_dict = {}
     for i in range(2, ofs_data_sh.max_row + 1):
@@ -206,4 +217,4 @@ if __name__ == "__main__":
     client = TelegramClient('OnlyFansBot', api_id, api_hash)
     #client.start()
     #client.loop.run_until_complete(check_for_posts())
-    upload_stories(account_data_dict, account_name="kimonosino", people_tag="@sweetie")
+    upload_stories(account_data_dict, account_name="kira sin", people_tag="@sweetie")
