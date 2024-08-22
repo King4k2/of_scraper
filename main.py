@@ -14,8 +14,6 @@ from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.common.by import By
 import pathlib
 import pickle
-import multiprocessing
-import threading
 
 
 async def download_img(msg, f_loc):
