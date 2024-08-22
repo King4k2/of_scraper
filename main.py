@@ -1,6 +1,8 @@
+import asyncio
+import config
+import os
 import selenium.common.exceptions
 from telethon import TelegramClient
-import config
 from telethon import types
 from telethon.tl.types import PeerChannel
 import time
@@ -9,11 +11,11 @@ import openpyxl
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
-import json
 import pathlib
 import pickle
+import multiprocessing
+import threading
 
 
 async def download_img(msg, f_loc):
@@ -22,199 +24,181 @@ async def download_img(msg, f_loc):
     return 1
 
 
-def check_for_el_by_xpath(driver, value: str):
+class BadInternetConnectionException(Exception):
+    pass
+
+
+def check_for_el(driver, value: str, method: str):
     x = 0
-    while x < 40:
+    if method.lower() == "id":
+        method = By.ID
+    elif method.lower() == "xpath":
+        method = By.XPATH
+    while x < 20:
         try:
-            el = driver.find_element(By.XPATH, value)
+            el = driver.find_element(method, value)
             return el
         except selenium.common.exceptions.NoSuchElementException:
-            if x == 39:
-                return 1
+            x = x + 1
             time.sleep(1)
             continue
-        finally:
-            x = x + 1
+    raise BadInternetConnectionException
 
 
-def check_for_el_by_id(driver, value: str):
-    x = 0
-    while x < 40:
-        try:
-            el = driver.find_element(By.ID, value)
-            return el
-        except selenium.common.exceptions.NoSuchElementException:
-            if x == 39:
-                return 1
-            time.sleep(1)
-            continue
-        finally:
-            x = x + 1
-
-
-def upload_stories_process(driver, people_tag):
-    el = check_for_el_by_id(driver=driver, value="add-story-btn")
-    if type(el) is int:
-        return "connection xueta"
-    el = driver.find_element(By.ID, "add-story-btn")
+def upload_stories(driver, people_tag, img_dir):
+    el = check_for_el(driver=driver, value="add-story-btn", method="id")
     el.click()
     time.sleep(1)
 
-    input_el = check_for_el_by_id(driver=driver, value="file_upload_input")
-    if type(input_el) is int:
-        return 1
-    input_el.send_keys(str(pathlib.Path("imgs/photo_393211_1646485453.jpg").absolute()))
+    input_el = check_for_el(driver=driver, value="file_upload_input", method="id")
+    input_el.send_keys(str(pathlib.Path(img_dir).absolute()))
 
-    el_btn = check_for_el_by_xpath(driver=driver, value='//*[@id="content"]/div[2]/section/div[1]/div[2]/button[1]')
-    if type(el_btn) is int:
-        return 1
+    el_btn = check_for_el(driver=driver, value='//*[@id="content"]/div[2]/section/div[1]/div[2]/button[1]', method="xpath")
     el_btn.click()
 
-    el_btn = check_for_el_by_xpath(driver=driver,
-                                   value='//*[@id="photo-editor-add-asset___BV_modal_body_"]/div/div[2]/div/div[6]/button')
-    if type(el_btn) is int:
-        return 1
+    el_btn = check_for_el(driver=driver, method="xpath",
+                          value='//*[@id="photo-editor-add-asset___BV_modal_body_"]/div/div[2]/div/div[6]/button')
     el_btn.click()
 
-    el_textarea = check_for_el_by_xpath(driver=driver,
-                                        value='//*[@id="content"]/div[2]/section/div[1]/section/div[3]/form/div/textarea')
-    if type(el_textarea) is int:
-        return 1
+    el_textarea = check_for_el(driver=driver, method="xpath",
+                               value='//*[@id="content"]/div[2]/section/div[1]/section/div[3]/form/div/textarea')
     el_textarea.send_keys(people_tag)
 
-    el_btn = check_for_el_by_xpath(driver=driver,
-                                   value='//*[@id="content"]/div[2]/section/div[1]/section/div[2]/div[2]/button')
-    if type(el_btn) is int:
-        return 1
+    el_btn = check_for_el(driver=driver, method="xpath",
+                          value='//*[@id="content"]/div[2]/section/div[1]/section/div[2]/div[2]/button')
     el_btn.click()
 
+    el_publish = check_for_el(driver=driver, method="xpath", value='//*[@id="content"]/div[2]/section/div[3]/button')
+    el_publish.click()
+    screenshot_dir = f"screenshots/{people_tag}_screenshot.png"
+    driver.save_screenshot(screenshot_dir)
+    for s in range(0, 21):
+        try:
+            el_publish.get_attribute(name="disabled")
+            time.sleep(1)
+        except selenium.common.exceptions.NoSuchElementException:
+            return screenshot_dir
 
-def upload_stories(ofs_data_dict: dict, account_name: str, people_tag: str):
-    options_ = ChromeOptions()
+
+async def of_login(account_name: str, people_tags_list: list, img_dir_list: list, group_entity):
+    options = ChromeOptions()
     service = ChromeService(executable_path='chromedriver-win64/chromedriver.exe')
     # disable webdriver mode
-    options_.add_argument("start-maximized")
-    options_.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options_.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument(
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36")
+    options.add_argument(r'user-data-dir=C:\Users\King\AppData\Local\Google\Chrome\User Data')
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument('--profile-directory=Profile 1')
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--headless")
 
-    options_.add_argument(f"user-agent={ofs_data_dict.get(account_name)[0]}")
-    options_.add_argument(f"accept-language={ofs_data_dict.get(account_name)[1]}")
+    driver = WebDriver(options=options, service=service)
+    try:
+        driver.get(url="https://onlyfans.com/")
 
-    driver = WebDriver(service=service, options=options_)
-    driver.get(url="https://onlyfans.com/")
-    # --------------------------- ЗДЕСЬ ДОЛЖНА БЫТЬ АВТОРИЗАЦИЯ
-    time.sleep(5)
-    for cookie_ in pickle.load(open(f'{account_name}_OFS_cookies.pkl', 'rb')):
-        print(cookie_)
-        #print({"name": cookie_.split("=")[0], "value": cookie_.split("=")[1]})
-        #driver.add_cookie({"name": cookie_.split("=")[0], "value": cookie_.split("=")[1]})
-        driver.add_cookie(cookie_)
-    time.sleep(5)
-    driver.refresh()
-
-    # ----------------------------
-    inp = input()
-    for counter_ in range(0, 1):
-        upload_stories_process(driver=driver, people_tag=people_tag)
-    time.sleep(5)
-    driver.quit()
-    # time.sleep(1000)
-    # __cf_bm _cfuvid fp
+        # Load cookie
+        for cookie in pickle.load(open(f'{account_name}_OFS_cookies.pkl', 'rb')):
+            driver.add_cookie(cookie)
+        driver.refresh()
+    except Exception as err:
+        print(err)
+    x = 0
+    while x < 2:
+        try:
+            # Uploading stories
+            uploaded_files = []
+            screenshot_dir_list = []
+            for n, img_dir, people_tag in zip(range(0, 5), img_dir_list, people_tags_list):
+                screenshot_dir = upload_stories(driver=driver, people_tag=people_tag, img_dir=img_dir)
+                screenshot_dir_list.append(screenshot_dir)
+                # Sending screenshots to chat
+                uploaded_files.append(await client.upload_file(screenshot_dir))
+            await client.send_file(entity=group_entity, file=uploaded_files)
+            for s_dir, i_dir in zip(screenshot_dir_list, img_dir_list):
+                if os.path.exists(s_dir):
+                    os.remove(s_dir)
+                if os.path.exists(i_dir):
+                    os.remove(i_dir)
+        except BadInternetConnectionException:
+            if x != 1:
+                continue
+            else:
+                print(f'Error: bad Internet connection or your cookies is old. '
+                      f'If it occurs again try to relogin in account with name "{account_name}"')
+                return 1
+        finally:
+            driver.quit()
 
 
 async def check_for_posts():
     try:
-        ofs_data_wb = openpyxl.load_workbook("OnlyFansConfig.xlsx")
-        ofs_data_sh = ofs_data_wb["Sheet1"]
-        if ofs_data_sh.max_row == 2:
-            print("You need to login into your OFS account first!")
-            return "error"
-        account_data_dict = {}
-        for i in range(2, ofs_data_sh.max_row+1):
-            acc_name = ofs_data_sh[f"A{i}"]
-            user_agent = ofs_data_sh[f"B{i}"]
-            accept_language = ofs_data_sh[f"C{i}"]
-            sec_ch_ua = ofs_data_sh[f"D{i}"]
-            cookie = ofs_data_sh[f"E{i}"]
-            if acc_name is None or user_agent is None or accept_language is None or sec_ch_ua is None or cookie is None:
-                continue
-            account_data_dict.update({acc_name: [user_agent, accept_language, sec_ch_ua, cookie]})
+
         async with client:
             msg_pattern = re.compile(r'@\w*\b')
             wb = openpyxl.load_workbook("OnlyFansExcel.xlsx")
             sh = wb["Лист1"]
-
-            posts_list = [] # 0-channel_id, 1-msg_id
+            posts_list = [] # 0-channel_id int, 1-msg_id, 2-counter int, 3-img_dir_list list, 4-people_tags_list list, 5-account_name str
             for c in range(2, sh.max_row+1):
                 group_link = sh[f"A{c}"].value
+                account_name = sh[f"B{c}"].value
                 if sh[f"A{c}"] is None or sh[f"B{c}"] is None:
                     break
-                print("1")
                 group = await client.get_entity(group_link)  # t.me/onlyfans5k
                 msg_list = await client.get_messages(group, limit=20)
                 for msg in msg_list:
                     if msg_pattern.match(msg.text) and type(msg.media) is types.MessageMediaPhoto:
                         counter = 0
                         img_dir_list = []
-                        posts_list.append([int(msg.peer_id.channel_id), msg.id, counter, img_dir_list])
+                        people_tags_list = []
+                        posts_list.append([int(msg.peer_id.channel_id), msg.id, counter, img_dir_list, people_tags_list])
                         break
+            process_list = []
+            me_entity = await client.get_entity("t.me/AstronomOOS")
 
-            while True:
+            while inp_comm[0] != "e":
                 for group in posts_list:
                     group_entity = await client.get_entity(PeerChannel(group[0]))  # t.me/onlyfans5k
-                    print("1")
                     msg_list = await client.get_messages(group_entity, limit=30)
                     for msg in msg_list:
                         if not msg_pattern.match(msg.message):
                             continue
                         if msg.id == group[1]:
-                            print("==group[1]")
                             break
                         print(msg)
-                        msg_text = msg.message
                         msg_reply = msg.reply_to
                         print(type(msg.media))
                         if type(msg.media) is types.MessageMediaPhoto:
                             f_dir = f"imgs/photo_{msg.id}_{msg.peer_id.channel_id}"
                             await download_img(msg=msg, f_loc=f_dir)
+                            group[4].append(msg.message)
                             group[3].append(f_dir)
                             print("2")
                             group[2] = group[2] + 1
+                            group[1] = msg.id
                         print(msg.date, msg.text)
                         if group[2] == 5:
-                            upload_stories(ofs_data_dict=account_data_dict, account_name="",
-                                           people_tag=str(msg.text).replace("@", ""))
+                            img_dir_list = group[3].copy()
+                            people_tags_list = group[4].copy()
+                            await of_login(account_name=group[5], people_tags_list=people_tags_list,
+                                           img_dir_list=img_dir_list, group_entity=me_entity)
+                            group[4] = []
                             group[2] = 0
                             group[1] = msg.id
                             group[3] = []
                             print("stories")
                 print("sleep-time")
-                time.sleep(10)
-    except Exception as err:
-        print(err)
+                time.sleep(20)
     finally:
         await client.disconnect()
 
 
 if __name__ == "__main__":
-    ofs_data_wb = openpyxl.load_workbook("OnlyFansConfig.xlsx")
-    ofs_data_sh = ofs_data_wb["Sheet1"]
-    if ofs_data_sh.max_row == 1:
-        print("You need to login into your OFS account first!")
-    account_data_dict = {}
-    for i in range(2, ofs_data_sh.max_row + 1):
-        acc_name = ofs_data_sh[f"A{i}"].value
-        user_agent = ofs_data_sh[f"B{i}"].value
-        accept_language = ofs_data_sh[f"C{i}"].value
-        sec_ch_ua = ofs_data_sh[f"D{i}"].value
-        cookie = ofs_data_sh[f"E{i}"].value
-        if acc_name is None or user_agent is None or accept_language is None or sec_ch_ua is None or cookie is None:
-            continue
-        account_data_dict.update({acc_name: [user_agent, accept_language, sec_ch_ua, cookie]})
-        print(account_data_dict)
-    api_id = 25453682  # API ID (получается при регистрации приложения на my.telegram.org)
-    api_hash = "ce7d4ffbf0946e858ab05004e53dacbb"  # API Hash (оттуда же
-    client = TelegramClient('OnlyFansBot', api_id, api_hash)
-    #client.start()
-    #client.loop.run_until_complete(check_for_posts())
-    upload_stories(account_data_dict, account_name="kira sin", people_tag="@sweetie")
+    # API ID (получается при регистрации приложения на my.telegram.org)
+    # API Hash (оттуда же)
+    client = TelegramClient('OnlyFansBot', int(config.api_id), config.api_hash)
+    client.start()
+    inp_comm = [""]
+    client.loop.run_until_complete(check_for_posts())

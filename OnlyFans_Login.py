@@ -8,27 +8,22 @@ import json
 
 
 def onlyfans_login():
-    wb = openpyxl.load_workbook(filename="OnlyFansConfig.xlsx")
-    sh = wb["Sheet1"]  # A - account name ; B - user-agent ; C - sec-ch-ua ; D - cookie
     acc_name = input("input OnlyFans Account name: ")
-    a = 0
-    for i in range(1, sh.max_row+1):
-        if sh[f"A{i}"].value == acc_name:
-            a = i
-            break
-    if a == 0:
-        if sh.max_row == 1:
-            a = sh.max_row
-        else:
-            a = sh.max_row+1
     options = ChromeOptions()
     service = ChromeService(executable_path='chromedriver-win64/chromedriver.exe')
     options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument(
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36")
+    options.add_argument(r'user-data-dir=C:\Users\King\AppData\Local\Google\Chrome\User Data')
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument('--profile-directory=Profile 1')
     driver = Chrome(service=service, options=options)
     driver.get("https://onlyfans.com/")
+
+    # Save cookie
     i = input("Input something: ")
     cookies_ = driver.get_cookies()
-    # res = req_interceptor(driver)
     with open(f'{acc_name}_OFS_cookies.pkl', 'wb')as file:
         pickle.dump(cookies_, file)
     driver.quit()
