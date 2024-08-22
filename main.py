@@ -151,10 +151,8 @@ async def check_for_posts():
                         counter = 0
                         img_dir_list = []
                         people_tags_list = []
-                        posts_list.append([int(msg.peer_id.channel_id), msg.id, counter, img_dir_list, people_tags_list])
+                        posts_list.append([int(msg.peer_id.channel_id), msg.id, counter, img_dir_list, people_tags_list, account_name])
                         break
-            process_list = []
-            me_entity = await client.get_entity("t.me/AstronomOOS")
 
             while inp_comm[0] != "e":
                 for group in posts_list:
@@ -181,7 +179,7 @@ async def check_for_posts():
                             img_dir_list = group[3].copy()
                             people_tags_list = group[4].copy()
                             await of_login(account_name=group[5], people_tags_list=people_tags_list,
-                                           img_dir_list=img_dir_list, group_entity=me_entity)
+                                           img_dir_list=img_dir_list, group_entity=group_entity)
                             group[4] = []
                             group[2] = 0
                             group[1] = msg.id
@@ -192,11 +190,9 @@ async def check_for_posts():
     finally:
         await client.disconnect()
 
-
-if __name__ == "__main__":
     # API ID (получается при регистрации приложения на my.telegram.org)
     # API Hash (оттуда же)
-    client = TelegramClient('OnlyFansBot', int(config.api_id), config.api_hash)
-    client.start()
-    inp_comm = [""]
-    client.loop.run_until_complete(check_for_posts())
+client = TelegramClient('OnlyFansBot', int(config.api_id), config.api_hash)
+client.start()
+inp_comm = [""]
+client.loop.run_until_complete(check_for_posts())
