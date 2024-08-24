@@ -183,7 +183,7 @@ async def check_for_posts():
                         posts_list.append([int(msg.peer_id.channel_id), msg.id, counter, img_dir_list,
                                            people_tags_list, account_name, int(group_max_posts_before_publish[0])])
                         break
-            a = False
+            a = True
             while a:
                 for group in posts_list:
                     group_entity = await client.get_entity(PeerChannel(group[0]))  # t.me/onlyfans5k
