@@ -1,5 +1,6 @@
 import pickle
-from selenium.webdriver.chrome.webdriver import WebDriver as Chrome
+import proxy
+from seleniumwire import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 import time
@@ -16,9 +17,23 @@ def onlyfans_login():
         "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36")
     options.add_argument(r'user-data-dir=C:\Users\King\AppData\Local\Google\Chrome\User Data')
     options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
     options.add_argument('--profile-directory=Profile 1')
-    driver = Chrome(service=service, options=options)
+    seleniumwire_options = {}
+    if proxy.proxy_url != "":
+        if "https" in proxy.proxy_url.lower():
+            seleniumwire_options = {
+                "proxy": {
+                    "https": proxy.proxy_url
+                },
+            }
+
+        elif "socks5" in proxy.proxy_url.lower():
+            seleniumwire_options = {
+                "proxy": {
+                    "socks5": proxy.proxy_url
+                },
+            }
+    driver = webdriver.Chrome(service=service, options=options, seleniumwire_options=seleniumwire_options)
     driver.get("https://onlyfans.com/")
 
     # Save cookie
