@@ -1,3 +1,5 @@
 selenium==4.23.1
 openpyxl==3.1.5
 Telethon==1.36.0
+blinker==1.7.0
+selenium-wire

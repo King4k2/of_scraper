@@ -1,14 +1,16 @@
 import asyncio
 import config
+import proxy
 import os
 import selenium.common.exceptions
 from telethon import TelegramClient
 from telethon import types
+from telethon import utils
 from telethon.tl.types import PeerChannel
 import time
 import re
 import openpyxl
-from selenium.webdriver.chrome.webdriver import WebDriver
+from seleniumwire import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.common.by import By
@@ -78,7 +80,7 @@ def upload_stories(driver, people_tag, img_dir):
             return screenshot_dir
 
 
-async def of_login(account_name: str, people_tags_list: list, img_dir_list: list, group_entity):
+async def of_login(account_name: str, people_tags_list: list, img_dir_list: list, group_entity, posts_num: int):
     options = ChromeOptions()
     service = ChromeService(executable_path='chromedriver-win64/chromedriver.exe')
     # disable webdriver mode
@@ -91,9 +93,24 @@ async def of_login(account_name: str, people_tags_list: list, img_dir_list: list
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument('--profile-directory=Profile 1')
     options.add_argument("--window-size=1920,1080")
-    options.add_argument("--headless")
+    options.add_argument("--headless=new")
+    seleniumwire_options = {}
+    if proxy.proxy_url != "":
+        if "https" in proxy.proxy_url.lower():
+            seleniumwire_options = {
+                "proxy": {
+                    "https": proxy.proxy_url
+                },
+            }
 
-    driver = WebDriver(options=options, service=service)
+        elif "socks5" in proxy.proxy_url.lower():
+            seleniumwire_options = {
+                "proxy": {
+                    "socks5": proxy.proxy_url
+                },
+            }
+
+    driver = webdriver.Chrome(options=options, service=service, seleniumwire_options=seleniumwire_options)
     try:
         driver.get(url="https://onlyfans.com/")
 
@@ -109,12 +126,21 @@ async def of_login(account_name: str, people_tags_list: list, img_dir_list: list
             # Uploading stories
             uploaded_files = []
             screenshot_dir_list = []
-            for n, img_dir, people_tag in zip(range(0, 5), img_dir_list, people_tags_list):
+            if os.path.exists(f"promo_imgs/{account_name}.jpg"):
+                upl_promo = await client.upload_file(f"promo_imgs/{account_name}.jpg")
+            elif os.path.exists(f"promo_imgs/{account_name}.png"):
+                upl_promo = await client.upload_file(f"promo_imgs/{account_name}.png")
+            else:
+                driver.quit()
+                print(f"Error: You need to add promo img to account: {account_name}")
+                break
+            promo_msg = await client.send_file(entity=group_entity, file=upl_promo)
+            for n, img_dir, people_tag in zip(range(0, posts_num), img_dir_list, people_tags_list):
                 screenshot_dir = upload_stories(driver=driver, people_tag=people_tag, img_dir=img_dir)
                 screenshot_dir_list.append(screenshot_dir)
                 # Sending screenshots to chat
                 uploaded_files.append(await client.upload_file(screenshot_dir))
-            await client.send_file(entity=group_entity, file=uploaded_files)
+            await client.send_file(entity=group_entity, file=uploaded_files, reply_to=promo_msg.id)
             for s_dir, i_dir in zip(screenshot_dir_list, img_dir_list):
                 if os.path.exists(s_dir):
                     os.remove(s_dir)
@@ -133,12 +159,11 @@ async def of_login(account_name: str, people_tags_list: list, img_dir_list: list
 
 async def check_for_posts():
     try:
-
         async with client:
             msg_pattern = re.compile(r'@\w*\b')
             wb = openpyxl.load_workbook("OnlyFansExcel.xlsx")
             sh = wb["Лист1"]
-            posts_list = [] # 0-channel_id int, 1-msg_id, 2-counter int, 3-img_dir_list list, 4-people_tags_list list, 5-account_name str
+            posts_list = [] # 0-channel_id int, 1-msg_id, 2-counter int, 3-img_dir_list list, 4-people_tags_list list, 5-account_name str, 6-max posts before publish int
             for c in range(2, sh.max_row+1):
                 group_link = sh[f"A{c}"].value
                 account_name = sh[f"B{c}"].value
@@ -146,15 +171,20 @@ async def check_for_posts():
                     break
                 group = await client.get_entity(group_link)  # t.me/onlyfans5k
                 msg_list = await client.get_messages(group, limit=20)
+                group_name = utils.get_display_name(group)
+                group_max_posts_before_publish = re.findall(pattern=r'\d',
+                                                            string=re.findall(pattern=r'\d[Cc][Uu]', string=group_name)[0])
+                print(group_max_posts_before_publish[0])
                 for msg in msg_list:
                     if msg_pattern.match(msg.text) and type(msg.media) is types.MessageMediaPhoto:
                         counter = 0
                         img_dir_list = []
                         people_tags_list = []
-                        posts_list.append([int(msg.peer_id.channel_id), msg.id, counter, img_dir_list, people_tags_list, account_name])
+                        posts_list.append([int(msg.peer_id.channel_id), msg.id, counter, img_dir_list,
+                                           people_tags_list, account_name, int(group_max_posts_before_publish[0])])
                         break
-
-            while inp_comm[0] != "e":
+            a = False
+            while a:
                 for group in posts_list:
                     group_entity = await client.get_entity(PeerChannel(group[0]))  # t.me/onlyfans5k
                     msg_list = await client.get_messages(group_entity, limit=30)
@@ -175,11 +205,11 @@ async def check_for_posts():
                             group[2] = group[2] + 1
                             group[1] = msg.id
                         print(msg.date, msg.text)
-                        if group[2] == 5:
+                        if group[2] == group[6]:
                             img_dir_list = group[3].copy()
                             people_tags_list = group[4].copy()
                             await of_login(account_name=group[5], people_tags_list=people_tags_list,
-                                           img_dir_list=img_dir_list, group_entity=group_entity)
+                                           img_dir_list=img_dir_list, group_entity=group_entity, posts_num=group[6])
                             group[4] = []
                             group[2] = 0
                             group[1] = msg.id
@@ -194,5 +224,4 @@ async def check_for_posts():
     # API Hash (оттуда же)
 client = TelegramClient('OnlyFansBot', int(config.api_id), config.api_hash)
 client.start()
-inp_comm = [""]
 client.loop.run_until_complete(check_for_posts())
