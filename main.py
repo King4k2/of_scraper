@@ -219,6 +219,6 @@ async def check_for_posts():
 
     # API ID (получается при регистрации приложения на my.telegram.org)
     # API Hash (оттуда же)
-client = TelegramClient('OnlyFansBot', int(config.api_id), config.api_hash)
+client = TelegramClient('OnlyFansTGBot', int(config.api_id), config.api_hash)
 client.start()
 client.loop.run_until_complete(check_for_posts())
