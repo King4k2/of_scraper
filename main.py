@@ -134,7 +134,7 @@ async def of_login(account_name: str, people_tags_list: list, img_dir_list: list
                 driver.quit()
                 print(f"Error: You need to add promo img to account: {account_name}")
                 break
-            promo_msg = await client.send_file(entity=group_entity, file=upl_promo)
+            promo_msg = await client.send_file(entity=group_entity, file=upl_promo, caption=f"@{account_name}")
             for n, img_dir, people_tag in zip(range(0, posts_num), img_dir_list, people_tags_list):
                 screenshot_dir = upload_stories(driver=driver, people_tag=people_tag, img_dir=img_dir)
                 screenshot_dir_list.append(screenshot_dir)
