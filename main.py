@@ -106,7 +106,7 @@ async def of_login(account_name: str, people_tags_list: list, img_dir_list: list
         elif "socks5" in proxy.proxy_url.lower():
             seleniumwire_options = {
                 "proxy": {
-                    "socks5": proxy.proxy_url
+                    "http": proxy.proxy_url
                 },
             }
 
@@ -115,9 +115,13 @@ async def of_login(account_name: str, people_tags_list: list, img_dir_list: list
         driver.get(url="https://onlyfans.com/")
 
         # Load cookie
-        for cookie in pickle.load(open(f'{account_name}_OFS_cookies.pkl', 'rb')):
-            driver.add_cookie(cookie)
-        driver.refresh()
+        if os.path.exists(f'{account_name}_OFS_cookies.pkl'):
+            for cookie in pickle.load(open(f'{account_name}_OFS_cookies.pkl', 'rb')):
+                driver.add_cookie(cookie)
+            driver.refresh()
+        else:
+            print(f'relogin in account with name "{account_name}"')
+            return 1
     except Exception as err:
         print(err)
     x = 0
