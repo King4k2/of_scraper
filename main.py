@@ -89,6 +89,8 @@ async def of_login(account_name: str, people_tags_list: list, img_dir_list: list
         "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36")
     options.add_argument(r'user-data-dir=C:\Users\King\AppData\Local\Google\Chrome\User Data')
     options.add_argument("--no-sandbox")
+    options.add_argument("--log-level=3")
+    options.add_argument("--disable-gpu")
     options.add_argument('--profile-directory=Profile 1')
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--headless=new")
@@ -173,7 +175,7 @@ async def check_for_posts():
                 group_max_posts_before_publish = re.findall(pattern=r'\d',
                                                             string=re.findall(pattern=r'\d[Cc][Uu]', string=group_name)[0])
                 for msg in msg_list:
-                    if msg_pattern.match(msg.text) and type(msg.media) is types.MessageMediaPhoto:
+                    if msg_pattern.match(msg.message) and type(msg.media) is types.MessageMediaPhoto:
                         counter = 0
                         img_dir_list = []
                         people_tags_list = []
@@ -219,6 +221,6 @@ async def check_for_posts():
 
     # API ID (получается при регистрации приложения на my.telegram.org)
     # API Hash (оттуда же)
-client = TelegramClient('OnlyFansTGBot', int(config.api_id), config.api_hash)
+client = TelegramClient('OFTGBot', int(config.api_id), config.api_hash)
 client.start()
 client.loop.run_until_complete(check_for_posts())
